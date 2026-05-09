@@ -28,3 +28,10 @@ src/data/lol-research-notes.md
 src/data/lol-korean-research.md
 src/data/lol-2025-2026-latest-data.md
 LOL_RESEARCH_NOTES.md
+
+# Build artifact (앱인토스 빌드 산출물)
+*.ait
+
+# Working/scratch HTML
+design-mockup.html
+generate-logo.html
