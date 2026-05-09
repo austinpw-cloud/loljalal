@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuizStore } from '@/stores/quiz-store';
 import { STAGE_NAMES } from '@/lib/quiz-engine';
 import TopBar from '@/components/ui/TopBar';
+import BannerAd from '@/components/ui/BannerAd';
 import RankingScreen from '@/components/result/RankingScreen';
 
 interface HomePageProps {
@@ -122,6 +123,22 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         </button>
 
         <p className="text-muted" style={{ fontSize: 10, opacity: 0.5 }}>회원가입 없이 바로 시작 · 약 2분</p>
+      </div>
+
+      {/* 하단 배너 광고 */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: '0 12px 8px',
+          paddingBottom: 'calc(var(--safe-bottom) + 8px)',
+          background: 'var(--bg)',
+          zIndex: 30,
+        }}
+      >
+        <BannerAd />
       </div>
     </main>
   );

@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useImperativeHandle, forwardRef } from 'react';
+
+export interface TimerHandle {
+  addTime: (seconds: number) => void;
+}
 
 interface TimerProps {
   duration: number;
@@ -7,19 +11,26 @@ interface TimerProps {
   onTick?: (timeLeft: number) => void;
 }
 
-export default function Timer({ duration, onExpire, isPaused, onTick }: TimerProps) {
+const Timer = forwardRef<TimerHandle, TimerProps>(({ duration, onExpire, isPaused, onTick }, ref) => {
   const startRef = useRef(Date.now());
+  const bonusRef = useRef(0); // 부스트로 추가된 시간
   const [pct, setPct] = useState(100);
   const expiredRef = useRef(false);
   const onTickRef = useRef(onTick);
   const onExpireRef = useRef(onExpire);
 
-  // Keep refs up-to-date without restarting the timer
   onTickRef.current = onTick;
   onExpireRef.current = onExpire;
 
+  useImperativeHandle(ref, () => ({
+    addTime: (seconds: number) => {
+      bonusRef.current += seconds;
+    },
+  }));
+
   useEffect(() => {
     startRef.current = Date.now();
+    bonusRef.current = 0;
     expiredRef.current = false;
     setPct(100);
 
@@ -27,8 +38,9 @@ export default function Timer({ duration, onExpire, isPaused, onTick }: TimerPro
     const tick = () => {
       if (isPaused || expiredRef.current) return;
       const elapsed = (Date.now() - startRef.current) / 1000;
-      const remaining = Math.max(0, duration - elapsed);
-      const newPct = (remaining / duration) * 100;
+      const totalDuration = duration + bonusRef.current;
+      const remaining = Math.max(0, totalDuration - elapsed);
+      const newPct = (remaining / totalDuration) * 100;
       setPct(newPct);
       onTickRef.current?.(remaining);
 
@@ -44,7 +56,7 @@ export default function Timer({ duration, onExpire, isPaused, onTick }: TimerPro
     return () => cancelAnimationFrame(frameId);
   }, [duration, isPaused]);
 
-  const color = pct > 50 ? 'var(--neon-green)' : pct > 20 ? 'var(--neon-yellow)' : 'var(--neon-pink)';
+  const color = pct > 50 ? 'var(--lol-gold)' : pct > 20 ? 'var(--lol-gold-dark)' : 'var(--lol-red)';
 
   return (
     <div className="timer-bar">
@@ -57,4 +69,7 @@ export default function Timer({ duration, onExpire, isPaused, onTick }: TimerPro
       />
     </div>
   );
-}
+});
+
+Timer.displayName = 'Timer';
+export default Timer;

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuizStore } from '@/stores/quiz-store';
-import { buildQuiz, STAGE_NAMES, STAGE_MULTIPLIERS } from '@/lib/quiz-engine';
+import { buildQuiz, STAGE_NAMES } from '@/lib/quiz-engine';
 import { getFeedbackMessage } from '@/lib/type-calculator';
+import { loadRewardAd, showRewardAd } from '@/lib/toss-sdk';
 import {
   playCorrectSound, playWrongSound, playComboSound,
   playTimerWarning, playCountdownBeep, playCountdownGo,
@@ -10,19 +11,19 @@ import { allQuestions } from '@/lib/load-data';
 import type { QuizQuestion, QuizAnswer } from '@/types';
 import TopBar from '@/components/ui/TopBar';
 import LoadingScreen from '@/components/ui/LoadingScreen';
-import Timer from '@/components/quiz/Timer';
+import BannerAd from '@/components/ui/BannerAd';
+import Timer, { type TimerHandle } from '@/components/quiz/Timer';
 import ProgressBar from '@/components/quiz/ProgressBar';
 import QuizCard from '@/components/quiz/QuizCard';
 import AnswerOptions from '@/components/quiz/AnswerOptions';
 import ComboFeedback from '@/components/quiz/ComboFeedback';
 
-type Phase = 'countdown' | 'playing' | 'feedback' | 'transitioning';
+type Phase = 'countdown' | 'playing' | 'feedback' | 'transitioning' | 'ad';
 
-/** 힌트 공개 수에 따른 기본 점수 — 겜잘알 동일 */
 function getBasePoints(hintsRevealed: number): number {
-  if (hintsRevealed <= 1) return 300;  // hint1만 (기본)
-  if (hintsRevealed === 2) return 200; // hint2까지
-  return 100;                          // hint3까지
+  if (hintsRevealed <= 1) return 300;
+  if (hintsRevealed === 2) return 200;
+  return 100;
 }
 
 interface QuizPageProps {
@@ -43,11 +44,28 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
   const [timerKey, setTimerKey] = useState(0);
   const [countdownNum, setCountdownNum] = useState(3);
   const [explanation, setExplanation] = useState<string | undefined>();
-  const [hintsRevealed, setHintsRevealed] = useState(1); // 1=hint1 always shown
+  const [hintsRevealed, setHintsRevealed] = useState(1);
+
+  // 부스트 상태
+  const [boostUsed, setBoostUsed] = useState(false);
+  const [boostLoading, setBoostLoading] = useState(false);
+  const [eliminatedOption, setEliminatedOption] = useState<string | null>(null);
+  const timerRef = useRef<TimerHandle>(null);
 
   const questionStartRef = useRef(Date.now());
   const hasAnsweredRef = useRef(false);
   const navigatingRef = useRef(false);
+
+  // 3단계 이상에서만 부스트 표시
+  const showBoost = stage >= 3;
+
+  // 현재 문제의 오답 목록
+  const wrongOptions = useMemo(() => {
+    if (!session) return [];
+    const q = session.questions[session.currentIndex];
+    if (!q) return [];
+    return q.shuffledOptions.filter((o) => o !== q.data.answer);
+  }, [session, session?.currentIndex]);
 
   // Build quiz
   const loadedStageRef = useRef<number | null>(null);
@@ -64,6 +82,8 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
     setComboCount(0);
     setSelectedOption(null);
     setHintsRevealed(1);
+    setBoostUsed(false);
+    setEliminatedOption(null);
     hasAnsweredRef.current = false;
   }, [stage, startQuiz]);
 
@@ -85,16 +105,52 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
   const currentQuestion: QuizQuestion | null =
     session?.questions[session.currentIndex] ?? null;
 
+  // 부스트: 누르면 즉시 타이머 정지(phase='ad') → 광고 → 보상 → 타이머 재개(phase='playing')
+  const handleBoost = useCallback(async () => {
+    if (boostUsed || boostLoading || hasAnsweredRef.current || phase !== 'playing') return;
+
+    // 즉시 타이머 정지
+    setPhase('ad');
+    setBoostLoading(true);
+
+    const loaded = await loadRewardAd();
+    if (loaded) {
+      const rewarded = await showRewardAd();
+      if (rewarded) {
+        // 오답 1개 제거
+        if (wrongOptions.length > 0) {
+          const randomWrong = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+          setEliminatedOption(randomWrong);
+        }
+        // 시간 5초 추가
+        timerRef.current?.addTime(5);
+        setBoostUsed(true);
+      }
+    } else {
+      // 광고 로드 실패 — 개발/테스트용 무료 부스트
+      if (wrongOptions.length > 0) {
+        const randomWrong = wrongOptions[Math.floor(Math.random() * wrongOptions.length)];
+        setEliminatedOption(randomWrong);
+      }
+      timerRef.current?.addTime(5);
+      setBoostUsed(true);
+    }
+
+    setBoostLoading(false);
+    // 타이머 재개
+    setPhase('playing');
+  }, [boostUsed, boostLoading, phase, wrongOptions]);
+
   const handleAnswer = useCallback(
     (option: string) => {
       if (!currentQuestion || !session || hasAnsweredRef.current || navigatingRef.current) return;
+      if (phase === 'ad') return; // 광고 중에는 답 못 누름
       hasAnsweredRef.current = true;
 
       const timeTaken = Date.now() - questionStartRef.current;
       const isCorrect = option === currentQuestion.data.answer;
       const isLastQuestion = session.currentIndex >= session.questions.length - 1;
 
-      // 겜잘알 포인트 계산: 힌트 기반 기본점수 + 속도 보너스
       let points = 0;
       if (isCorrect) {
         const base = getBasePoints(hintsRevealed);
@@ -152,11 +208,13 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
           setPhase('playing');
           questionStartRef.current = Date.now();
           hasAnsweredRef.current = false;
-          setHintsUsed(0);
+          setHintsRevealed(1);
+          setBoostUsed(false);
+          setEliminatedOption(null);
         }
       }, delay);
     },
-    [session, currentQuestion, comboCount, hintsRevealed, soundEnabled, stage, submitAnswer, nextQuestion, onNavigate],
+    [session, currentQuestion, comboCount, hintsRevealed, soundEnabled, stage, phase, submitAnswer, nextQuestion, onNavigate],
   );
 
   const handleTimerExpire = useCallback(() => {
@@ -164,8 +222,10 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
     handleAnswer('__timeout__');
   }, [currentQuestion, handleAnswer]);
 
-  // 포인트 라벨
   const pointsLabel = hintsRevealed <= 1 ? '300pt' : hintsRevealed === 2 ? '200pt' : '100pt';
+
+  // 타이머는 playing 상태에서만 동작, ad/feedback/countdown 에서는 정지
+  const timerPaused = phase !== 'playing';
 
   if (phase === 'transitioning') {
     return (
@@ -228,16 +288,15 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
         </div>
         <div className="mb-1">
           <Timer
+            ref={timerRef}
             key={timerKey}
             duration={15}
             onExpire={handleTimerExpire}
-            isPaused={phase !== 'playing'}
+            isPaused={timerPaused}
             onTick={(t) => {
-              // 힌트2: 12초 남았을 때 공개
               if (t <= 12 && hintsRevealed < 2 && !hasAnsweredRef.current) {
                 setHintsRevealed(2);
               }
-              // 힌트3: 7초 남았을 때 공개
               if (t <= 7 && hintsRevealed < 3 && !hasAnsweredRef.current) {
                 setHintsRevealed(3);
               }
@@ -259,22 +318,53 @@ export default function QuizPage({ stage, onNavigate }: QuizPageProps) {
         />
       </div>
 
+      {/* 부스트 버튼 (3단계 이상에서만) — 힌트와 답안 사이 가운데 */}
+      {showBoost && (
+        <div className="flex-1 min-h-0" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {!boostUsed && (phase === 'playing' || phase === 'ad') && !selectedOption ? (
+            <button
+              onClick={handleBoost}
+              disabled={boostLoading || phase === 'ad'}
+              style={{
+                width: '80%',
+                padding: '12px 24px',
+                border: '1px solid var(--border)',
+                background: 'linear-gradient(180deg, rgba(200,155,60,0.12) 0%, rgba(10,20,40,0.8) 100%)',
+                color: 'var(--lol-gold)',
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: 'pointer',
+                letterSpacing: 1,
+                clipPath: 'polygon(6px 0, calc(100% - 6px) 0, 100% 6px, 100% calc(100% - 6px), calc(100% - 6px) 100%, 6px 100%, 0 calc(100% - 6px), 0 6px)',
+                opacity: boostLoading ? 0.5 : 1,
+                transition: 'all 0.15s',
+              }}
+            >
+              {boostLoading ? '광고 로딩 중...' : '⚡ 오답 제거 + 5초 추가'}
+            </button>
+          ) : boostUsed ? (
+            <span className="text-xs" style={{ color: 'var(--lol-gold)', opacity: 0.4 }}>
+              ⚡ 부스트 사용 완료
+            </span>
+          ) : null}
+        </div>
+      )}
+
       {/* Answer options */}
-      <div className="shrink-0 pt-1">
+      <div className="shrink-0">
         <AnswerOptions
           options={currentQuestion.shuffledOptions}
           correctAnswer={currentQuestion.data.answer}
           onSelect={handleAnswer}
           selectedOption={selectedOption}
           disabled={phase !== 'playing'}
+          eliminatedOption={eliminatedOption}
         />
       </div>
 
-      {/* Footer */}
-      <div className="shrink-0" style={{ padding: '4px 0 4px', textAlign: 'center' }}>
-        <p className="text-muted" style={{ fontSize: 9, opacity: 0.6 }}>
-          출제된 문제는 오류가 있을 수 있습니다
-        </p>
+      {/* 띠배너 (모든 단계에서 하단 노출) */}
+      <div className="shrink-0" style={{ paddingTop: 6, paddingBottom: 2 }}>
+        <BannerAd />
       </div>
 
       <ComboFeedback

@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuizStore } from '@/stores/quiz-store';
 import { calculateResult } from '@/lib/type-calculator';
 import { STAGE_NAMES, STAGE_MULTIPLIERS, PASS_THRESHOLD } from '@/lib/quiz-engine';
-import { submitScore, loadRewardAd, showRewardAd } from '@/lib/toss-sdk';
+import {
+  submitScore, loadRewardAd, showRewardAd,
+  loadInterstitialAd, showInterstitialAd,
+} from '@/lib/toss-sdk';
 import TopBar from '@/components/ui/TopBar';
 import ResultCard from '@/components/result/ResultCard';
 import RankingScreen from '@/components/result/RankingScreen';
@@ -23,6 +26,7 @@ export default function ResultPage({ stage, onNavigate }: ResultPageProps) {
 
   const [showAdGate, setShowAdGate] = useState(false);
   const [adLoaded, setAdLoaded] = useState(false);
+  const [interstitialLoaded, setInterstitialLoaded] = useState(false);
   const [showRanking, setShowRanking] = useState(true);
 
   const checkedRef = useRef(false);
@@ -45,7 +49,7 @@ export default function ResultPage({ stage, onNavigate }: ResultPageProps) {
     return { ...calcResult, passed };
   }, [session, stage]);
 
-  // Save result & submit to leaderboard
+  // Save result & pre-load ads
   const savedRef = useRef(false);
   useEffect(() => {
     if (!result || !session || savedRef.current) return;
@@ -55,9 +59,18 @@ export default function ResultPage({ stage, onNavigate }: ResultPageProps) {
     addStageResult({ stage, score: result.score, totalPoints: result.totalPoints, passed: result.passed });
     addPoints(result.totalPoints);
     submitScore(storeTotalPoints + result.totalPoints);
-    loadRewardAd().then(setAdLoaded);
+
+    // 미통과 → 리워드 광고 미리 로드
+    if (!result.passed) {
+      loadRewardAd().then(setAdLoaded);
+    }
+    // 통과 → 전면 광고 미리 로드 (다음 단계 진입용)
+    if (result.passed && stage < 10) {
+      loadInterstitialAd().then(setInterstitialLoaded);
+    }
   }, [result, session, stage, setResult, addStageResult, addPoints, storeTotalPoints]);
 
+  // 재도전 (리워드 광고)
   const handleRetrySameStage = () => {
     setShowAdGate(true);
   };
@@ -71,8 +84,15 @@ export default function ResultPage({ stage, onNavigate }: ResultPageProps) {
     onNavigate('quiz', { stage: String(stage) });
   };
 
-  const handleNextStage = () => {
+  // 다음 단계 (전면 광고)
+  const handleNextStage = async () => {
     const nextStage = Math.min(10, stage + 1);
+
+    // 전면 광고 표시
+    if (interstitialLoaded) {
+      await showInterstitialAd();
+    }
+
     resetForNextStage();
     onNavigate('quiz', { stage: String(nextStage) });
   };
@@ -164,7 +184,7 @@ export default function ResultPage({ stage, onNavigate }: ResultPageProps) {
 
         {!passed && (
           <button onClick={handleRetrySameStage} className="game-btn game-btn-primary" style={{ fontSize: 13 }}>
-            짧은 광고보고 재도전하기
+            짧은 광고 보고 재도전하기
           </button>
         )}
 

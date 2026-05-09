@@ -4,6 +4,7 @@ interface AnswerOptionsProps {
   onSelect: (option: string) => void;
   selectedOption: string | null;
   disabled: boolean;
+  eliminatedOption?: string | null;
 }
 
 export default function AnswerOptions({
@@ -12,11 +13,14 @@ export default function AnswerOptions({
   onSelect,
   selectedOption,
   disabled,
+  eliminatedOption,
 }: AnswerOptionsProps) {
   return (
     <div className="grid grid-cols-2 gap-2">
       {options.map((option) => {
+        const isEliminated = eliminatedOption === option;
         let cls = 'answer-btn';
+
         if (selectedOption) {
           if (option === selectedOption && option === correctAnswer) {
             cls += ' selected-correct';
@@ -32,7 +36,12 @@ export default function AnswerOptions({
             key={option}
             className={cls}
             onClick={() => onSelect(option)}
-            disabled={disabled || !!selectedOption}
+            disabled={disabled || !!selectedOption || isEliminated}
+            style={isEliminated && !selectedOption ? {
+              opacity: 0.2,
+              textDecoration: 'line-through',
+              pointerEvents: 'none',
+            } : undefined}
           >
             {option}
           </button>

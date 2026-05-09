@@ -137,7 +137,7 @@ export function generateTagline(
     const stageNames = ["", "아이언", "브론즈", "실버", "골드", "플래티넘", "에메랄드", "다이아몬드", "마스터", "그랜드마스터", "챌린저"];
     const msgs = [
       `${stageNames[stage]} 통과! 다음 단계도 기대되는데요.`,
-      `역시 롤잘알! ${stageNames[stage]}은 거뜬하시네요.`,
+      `역시 롤잘알! ${stageNames[stage]} 거뜬하시네요.`,
       `깔끔하게 통과! 다음은 더 어려워집니다.`,
     ];
     return msgs[Math.floor(Math.random() * msgs.length)];
