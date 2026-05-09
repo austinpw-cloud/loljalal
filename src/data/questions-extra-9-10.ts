@@ -82,7 +82,7 @@ export const QUESTIONS_EXTRA_9_10: LolQuestion[] = [
       "검을 던져 적 5명에게 동시 피해",
     ],
     answer: "무적 상태로 적 전체를 돌아다니며 난도질",
-    hint1: "피오라은(는) 리워크로 완전히 다른 챔피언이 됐어요.",
+    hint1: "피오라는 리워크로 완전히 다른 챔피언이 됐어요.",
     hint2: "무적이나 면역 효과가 핵심이었어요.",
     hint3: "정답의 첫 글자는 '무'입니다.",
     explanation:
@@ -101,7 +101,7 @@ export const QUESTIONS_EXTRA_9_10: LolQuestion[] = [
       "이니시에이트 전사",
     ],
     answer: "마법 저항 특화 AP 탱커",
-    hint1: "갈리오은(는) 리워크로 완전히 다른 챔피언이 됐어요.",
+    hint1: "갈리오는 리워크로 완전히 다른 챔피언이 됐어요.",
     hint2: "예전에는 AP 관련 빌드가 핵심이었어요.",
     hint3: "정답의 첫 글자는 '마'입니다.",
     explanation:
@@ -1403,7 +1403,7 @@ export const QUESTIONS_EXTRA_9_10: LolQuestion[] = [
       "서포터 → 정글러",
     ],
     answer: "별 궤도 → 스타파이어 빔 + 성운 스케일링",
-    hint1: "아우렐리온은(는) 리워크로 완전히 다른 챔피언이 됐어요.",
+    hint1: "아우렐리온은 리워크로 완전히 다른 챔피언이 됐어요.",
     hint2: "정답에 '별 궤도' 키워드가 있어요.",
     hint3: "정답의 첫 글자는 '별'입니다.",
     explanation:
@@ -1422,7 +1422,7 @@ export const QUESTIONS_EXTRA_9_10: LolQuestion[] = [
       "드래곤 조종",
     ],
     answer: "죽어도 부활하는 패시브 (혈지)",
-    hint1: "아트록스은(는) 리워크로 완전히 다른 챔피언이 됐어요.",
+    hint1: "아트록스는 리워크로 완전히 다른 챔피언이 됐어요.",
     hint2: "죽어도 다시 살아나는 능력이 핵심이었어요.",
     hint3: "정답의 첫 글자는 '죽'입니다.",
     explanation:
